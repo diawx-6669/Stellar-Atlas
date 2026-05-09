@@ -2,539 +2,928 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>МЛЕЧНЫЙ ПУТЬ — АТЛАС ГАЛАКТИКИ v3.0</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GAIA STELLAR ATLAS · v5.0</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
-  #three-canvas { display: block; position: fixed; top: 0; left: 0; }
+/* ── Reset ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; background: #000; overflow: hidden; color: #fff; }
+body { font-family: 'Courier New', Courier, monospace; cursor: crosshair; }
+#cv { display: block; position: fixed; inset: 0; }
 
-  /* HUD */
-  #title { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.6); font-size: 11px; letter-spacing: 4px; text-transform: uppercase; z-index: 10; pointer-events: none; }
-  #scanline { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px); pointer-events: none; z-index: 5; }
+/* ── Scanline CRT ── */
+#scanline {
+  position: fixed; inset: 0; pointer-events: none; z-index: 3;
+  background: repeating-linear-gradient(
+    180deg, transparent 0, transparent 2px,
+    rgba(0,0,0,0.028) 2px, rgba(0,0,0,0.028) 4px
+  );
+}
 
-  #hud-left { position: fixed; left: 20px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; z-index: 10; pointer-events: none; }
-  #hud-right { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; align-items: flex-end; z-index: 10; pointer-events: none; }
-  .hud-panel { background: rgba(0,255,200,0.05); border: 0.5px solid rgba(0,255,200,0.22); border-radius: 8px; padding: 10px 14px; color: rgba(0,255,200,0.8); font-size: 11px; min-width: 150px; backdrop-filter: blur(6px); }
-  .hud-label { color: rgba(0,255,200,0.4); font-size: 9px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 3px; }
-  .hud-value { font-size: 14px; font-weight: bold; color: rgba(0,255,200,0.9); }
+/* ── Loading ── */
+#loading {
+  position: fixed; inset: 0; z-index: 300;
+  background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+}
+.ld-esa  { font-size: 9px; letter-spacing: 7px; color: rgba(80,200,255,0.35); text-transform: uppercase; }
+.ld-ttl  { font-size: 20px; letter-spacing: 9px; color: rgba(80,200,255,0.9); text-transform: uppercase; }
+.ld-bar  { width: 300px; height: 1px; background: rgba(80,200,255,0.12); }
+.ld-fill { height: 100%; width: 0%; background: linear-gradient(90deg, rgba(40,140,220,0.7), rgba(80,220,255,1)); transition: width .35s ease; }
+.ld-msg  { font-size: 9px; letter-spacing: 3px; color: rgba(80,200,255,0.4); text-transform: uppercase; }
 
-  /* Gesture indicator */
-  #gesture-panel {
-    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-    background: rgba(0,0,0,0.75); border: 0.5px solid rgba(0,255,200,0.3);
-    border-radius: 12px; padding: 12px 28px; color: rgba(0,255,200,0.9);
-    font-size: 13px; text-align: center; z-index: 10; letter-spacing: 1px;
-    backdrop-filter: blur(10px); transition: opacity 0.4s;
-  }
-  #gesture-icon { font-size: 22px; margin-right: 8px; }
+/* ── Top title ── */
+#title {
+  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  z-index: 10; pointer-events: none;
+  font-size: 10px; letter-spacing: 5px; text-transform: uppercase;
+  color: rgba(255,255,255,0.38);
+}
 
-  /* Instructions */
-  #instructions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 16px; z-index: 10; pointer-events: none; }
-  .instr { background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 5px 14px; color: rgba(255,255,255,0.35); font-size: 10px; letter-spacing: 1px; }
+/* ── HUD panels ── */
+.hp {
+  background: rgba(5,15,20,0.65);
+  border: 0.5px solid rgba(80,200,255,0.18);
+  border-radius: 7px; padding: 10px 14px;
+  backdrop-filter: blur(12px);
+}
+.hp-lbl { font-size: 8px; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(80,200,255,0.38); margin-bottom: 3px; }
+.hp-val { font-size: 13px; font-weight: 700; color: rgba(80,200,255,0.92); line-height: 1.25; }
+.hp-val small { font-size: 9px; font-weight: 400; color: rgba(80,200,255,0.5); }
 
-  /* Camera feed */
-  #cam-container {
-    position: fixed; bottom: 20px; right: 20px; width: 200px; height: 150px;
-    border: 1px solid rgba(0,255,200,0.25); border-radius: 8px; overflow: hidden;
-    z-index: 20; background: #000;
-  }
-  #cam-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.75; }
-  #cam-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
-  #cam-label { position: absolute; top: 4px; left: 8px; font-size: 9px; color: rgba(0,255,200,0.6); letter-spacing: 2px; }
-  #cam-status { position: absolute; bottom: 4px; right: 8px; font-size: 9px; color: rgba(0,255,200,0.5); }
+/* ── Left HUD column ── */
+#hud-l {
+  position: fixed; left: 18px; top: 50%; transform: translateY(-50%);
+  z-index: 10; pointer-events: none;
+  display: flex; flex-direction: column; gap: 9px;
+}
 
-  /* Loading overlay */
-  #loading {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: #000010; display: flex; flex-direction: column; align-items: center;
-    justify-content: center; z-index: 100; color: rgba(0,255,200,0.8); gap: 16px;
-  }
-  #loading .load-title { font-size: 18px; letter-spacing: 6px; }
-  #loading .load-bar { width: 300px; height: 2px; background: rgba(0,255,200,0.1); border-radius: 2px; overflow: hidden; }
-  #loading .load-fill { height: 100%; background: rgba(0,255,200,0.7); width: 0%; transition: width 0.3s; }
-  #loading .load-msg { font-size: 10px; color: rgba(0,255,200,0.4); letter-spacing: 2px; }
+/* ── Right HUD column ── */
+#hud-r {
+  position: fixed; right: 18px; top: 50%; transform: translateY(-50%);
+  z-index: 10; pointer-events: none;
+  display: flex; flex-direction: column; gap: 9px; align-items: flex-end;
+}
 
-  #cam-enable-btn {
-    position: fixed; top: 20px; right: 20px; z-index: 30;
-    background: rgba(0,255,200,0.1); border: 1px solid rgba(0,255,200,0.4);
-    color: rgba(0,255,200,0.9); padding: 8px 16px; border-radius: 6px;
-    font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer;
-    letter-spacing: 1px; transition: background 0.2s;
-  }
-  #cam-enable-btn:hover { background: rgba(0,255,200,0.2); }
+/* ── Star Info Panel (top-left) ── */
+#star-panel {
+  position: fixed; left: 18px; top: 18px;
+  z-index: 15; pointer-events: none;
+  width: 230px;
+  background: rgba(3,12,20,0.82);
+  border: 0.5px solid rgba(80,200,255,0.32);
+  border-radius: 10px; padding: 14px 16px;
+  backdrop-filter: blur(16px);
+  opacity: 0; transform: translateX(-10px);
+  transition: opacity .3s, transform .3s;
+}
+#star-panel.visible { opacity: 1; transform: translateX(0); }
+#star-panel h3 {
+  font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+  color: rgba(80,200,255,0.45); margin-bottom: 10px;
+  border-bottom: 0.5px solid rgba(80,200,255,0.12); padding-bottom: 7px;
+}
+.sp-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.sp-key { font-size: 8px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(80,200,255,0.38); }
+.sp-val { font-size: 12px; font-weight: 700; color: rgba(80,220,255,0.95); }
+#sp-mag-bar { margin-top: 8px; height: 2px; background: rgba(80,200,255,0.1); border-radius: 1px; overflow: hidden; }
+#sp-mag-fill { height: 100%; background: linear-gradient(90deg, rgba(80,200,255,0.8), rgba(200,240,255,1)); transition: width .4s; }
+
+/* ── Gesture badge (bottom-center) ── */
+#gest-badge {
+  position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%);
+  z-index: 10; pointer-events: none;
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(0,8,12,0.75);
+  border: 0.5px solid rgba(80,200,255,0.22);
+  border-radius: 50px; padding: 8px 24px;
+  backdrop-filter: blur(14px);
+  transition: border-color .3s;
+  white-space: nowrap;
+}
+#gi { font-size: 20px; }
+#gt { font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(80,200,255,0.85); }
+
+/* ── Instructions ── */
+#instrbar {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  z-index: 10; pointer-events: none;
+  display: flex; gap: 9px; flex-wrap: wrap; justify-content: center;
+}
+.instr {
+  font-size: 8.5px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: rgba(255,255,255,0.24);
+  border: 0.5px solid rgba(255,255,255,0.09);
+  border-radius: 20px; padding: 4px 11px;
+}
+
+/* ── Camera window (round-cornered, neon border) ── */
+#cam-wrap {
+  position: fixed; bottom: 18px; right: 18px; z-index: 20;
+  width: 180px; height: 135px;
+  border-radius: 14px; overflow: hidden;
+  border: 1px solid rgba(80,200,255,0.35);
+  box-shadow:
+    0 0 0 1px rgba(80,200,255,0.08),
+    0 0 20px rgba(80,200,255,0.12),
+    inset 0 0 0 1px rgba(80,200,255,0.05);
+  background: #000;
+  display: none;
+}
+#cam-video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; transform: scaleX(-1); opacity: 0.55;
+}
+#cam-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  transform: scaleX(-1);
+}
+#cam-lbl {
+  position: absolute; top: 5px; left: 7px;
+  font-size: 7.5px; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(80,200,255,0.6); pointer-events: none; z-index: 5;
+}
+#cam-dot {
+  position: absolute; top: 7px; right: 7px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #00ff88;
+  box-shadow: 0 0 6px #00ff88;
+  z-index: 5; animation: dot-pulse 2s infinite;
+}
+@keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+/* ── Select ring ── */
+#select-ring {
+  position: fixed; pointer-events: none; z-index: 12;
+  width: 36px; height: 36px; margin: -18px 0 0 -18px;
+  border: 1.5px solid rgba(80,200,255,0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(80,200,255,0.5), inset 0 0 6px rgba(80,200,255,0.2);
+  opacity: 0; transition: opacity .25s;
+}
+#select-ring.visible { opacity: 1; }
+
+/* ── Dwell progress ring (SVG overlay) ── */
+#dwell-svg {
+  position: fixed; pointer-events: none; z-index: 13;
+  width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  opacity: 0; transform: rotate(-90deg);
+  transition: opacity .15s;
+}
+#dwell-svg.visible { opacity: 1; }
+
+/* ── Camera enable button ── */
+#cam-btn {
+  position: fixed; top: 18px; right: 18px; z-index: 30;
+  background: rgba(80,200,255,0.08);
+  border: 1px solid rgba(80,200,255,0.35);
+  color: rgba(80,200,255,0.9);
+  font-family: inherit; font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 9px 16px; border-radius: 7px; cursor: pointer;
+  transition: background .2s, box-shadow .2s;
+}
+#cam-btn:hover    { background: rgba(80,200,255,0.16); box-shadow: 0 0 16px rgba(80,200,255,0.12); }
+#cam-btn:disabled { opacity: .4; cursor: default; }
+
+/* ── Reset flash ── */
+#reset-flash {
+  position: fixed; inset: 0; background: rgba(80,200,255,0.08);
+  pointer-events: none; z-index: 200; opacity: 0;
+  transition: opacity .15s;
+}
 </style>
 </head>
 <body>
 
+<!-- Loading -->
 <div id="loading">
-  <div class="load-title">GALAXY ATLAS v3.0</div>
-  <div class="load-bar"><div class="load-fill" id="load-fill"></div></div>
-  <div class="load-msg" id="load-msg">ИНИЦИАЛИЗАЦИЯ...</div>
+  <div class="ld-esa">ESA · Gaia Data Release 3</div>
+  <div class="ld-ttl">Stellar Atlas</div>
+  <div class="ld-bar"><div class="ld-fill" id="ldf"></div></div>
+  <div class="ld-msg" id="ldm">ИНИЦИАЛИЗАЦИЯ...</div>
 </div>
 
-<canvas id="three-canvas"></canvas>
+<canvas id="cv"></canvas>
 <div id="scanline"></div>
-<div id="title">МЛЕЧНЫЙ ПУТЬ — АТЛАС ГАЛАКТИКИ v3.0</div>
+<div id="title">МЛЕЧНЫЙ ПУТЬ &nbsp;·&nbsp; GAIA DR3 &nbsp;·&nbsp; v5.0</div>
 
-<div id="hud-left">
-  <div class="hud-panel">
-    <div class="hud-label">Координаты X</div>
-    <div class="hud-value" id="hud-x">8.300 кпк</div>
+<!-- Star info panel -->
+<div id="star-panel">
+  <h3>Звезда · Gaia DR3</h3>
+  <div class="sp-row"><span class="sp-key">ID</span><span class="sp-val" id="sp-id">—</span></div>
+  <div class="sp-row"><span class="sp-key">Блеск (mag)</span><span class="sp-val" id="sp-mag">—</span></div>
+  <div class="sp-row"><span class="sp-key">Дистанция</span><span class="sp-val" id="sp-dist">—</span></div>
+  <div class="sp-row"><span class="sp-key">X / Y / Z</span><span class="sp-val" id="sp-xyz" style="font-size:10px">—</span></div>
+  <div id="sp-mag-bar"><div id="sp-mag-fill" style="width:0%"></div></div>
+</div>
+
+<!-- Left HUD -->
+<div id="hud-l">
+  <div class="hp">
+    <div class="hp-lbl">Координаты</div>
+    <div class="hp-val" id="h-pos">0.000 <small>кпк</small></div>
   </div>
-  <div class="hud-panel">
-    <div class="hud-label">Координаты Y/Z</div>
-    <div class="hud-value" id="hud-y">0.000 / 0.000</div>
+  <div class="hp">
+    <div class="hp-lbl">Объектов</div>
+    <div class="hp-val" id="h-cnt">—</div>
   </div>
-  <div class="hud-panel">
-    <div class="hud-label">Объектов</div>
-    <div class="hud-value" id="hud-count">—</div>
+  <div class="hp">
+    <div class="hp-lbl">Дистанция</div>
+    <div class="hp-val" id="h-rad">— <small>пк</small></div>
   </div>
 </div>
 
-<div id="hud-right">
-  <div class="hud-panel" style="text-align:right">
-    <div class="hud-label">Масштаб</div>
-    <div class="hud-value" id="hud-zoom">1.00x</div>
+<!-- Right HUD -->
+<div id="hud-r">
+  <div class="hp" style="text-align:right;min-width:100px">
+    <div class="hp-lbl">FPS</div>
+    <div class="hp-val" id="h-fps">—</div>
   </div>
-  <div class="hud-panel" style="text-align:right">
-    <div class="hud-label">Жест</div>
-    <div class="hud-value" id="hud-gesture">—</div>
-  </div>
-  <div class="hud-panel" style="text-align:right">
-    <div class="hud-label">FPS</div>
-    <div class="hud-value" id="hud-fps">—</div>
+  <div class="hp" style="text-align:right;min-width:100px">
+    <div class="hp-lbl">Жест</div>
+    <div class="hp-val" id="h-gest">—</div>
   </div>
 </div>
 
-<div id="gesture-panel">
-  <span id="gesture-icon">✋</span><span id="gesture-text">Жест не определён</span>
+<!-- Gesture badge -->
+<div id="gest-badge">
+  <span id="gi">🖐</span>
+  <span id="gt">Ожидание</span>
 </div>
 
-<div id="instructions">
-  <div class="instr">✊ КУЛАК — ВРАЩЕНИЕ</div>
-  <div class="instr">🤏 ПИНЧ — МАСШТАБ</div>
-  <div class="instr">✋ ЛАДОНЬ — ПАНОРАМА</div>
-  <div class="instr">🖱 МЫШЬ — ТОЖ</div>
+<!-- Instructions -->
+<div id="instrbar">
+  <div class="instr">✊ Кулак — Вращение</div>
+  <div class="instr">🤏 Пинч — Зум</div>
+  <div class="instr">✋ Ладонь — Панорама</div>
+  <div class="instr">☝ Палец — Выбор</div>
+  <div class="instr">✌ Мир — Сброс</div>
 </div>
 
-<button id="cam-enable-btn" onclick="enableCamera()">📷 ВКЛЮЧИТЬ КАМЕРУ</button>
+<button id="cam-btn" onclick="enableCam()">📷 &nbsp;Камера</button>
 
-<div id="cam-container" style="display:none">
+<!-- Camera -->
+<div id="cam-wrap">
   <video id="cam-video" autoplay muted playsinline></video>
   <canvas id="cam-canvas"></canvas>
-  <div class="cam-label">CAM</div>
-  <div id="cam-status">ОЖИДАНИЕ</div>
+  <div id="cam-lbl">CAM · LIVE</div>
+  <div id="cam-dot"></div>
 </div>
 
-<!-- Three.js -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Selection ring + dwell SVG -->
+<div id="select-ring"></div>
+<svg id="dwell-svg" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+  <circle id="dwell-circle" cx="22" cy="22" r="19"
+    fill="none" stroke="rgba(80,200,255,0.9)" stroke-width="2"
+    stroke-dasharray="119.4" stroke-dashoffset="119.4"/>
+</svg>
 
-<!-- MediaPipe Hands -->
+<div id="reset-flash"></div>
+
+<!-- ═══ Libraries ═══ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
 <script>
-// ─── LOADING ────────────────────────────────────────────────
-function setLoad(pct, msg) {
-  document.getElementById('load-fill').style.width = pct + '%';
-  document.getElementById('load-msg').textContent = msg;
-}
+'use strict';
 
-// ─── THREE.JS SETUP ─────────────────────────────────────────
-const canvas3 = document.getElementById('three-canvas');
-const renderer = new THREE.WebGLRenderer({ canvas: canvas3, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x000008);
+/* ══════════════════════════════════════════════════════════
+   UTILS
+══════════════════════════════════════════════════════════ */
+const lerp  = (a,b,t) => a + (b-a)*t;
+const clamp = (v,lo,hi) => Math.max(lo, Math.min(hi,v));
+const setLD = (p,m) => { document.getElementById('ldf').style.width=p+'%'; document.getElementById('ldm').textContent=m; };
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200000);
-camera.position.set(0, 0, 1200);
+/* ══════════════════════════════════════════════════════════
+   RENDERER
+══════════════════════════════════════════════════════════ */
+const canvas = document.getElementById('cv');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x000000,1);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(52, innerWidth/innerHeight, 0.01, 200000);
+camera.position.set(0,0,160);
 
 window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
+  renderer.setSize(innerWidth,innerHeight);
+  camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
 });
 
-// ─── STAR GEOMETRY FROM JSON ─────────────────────────────────
-let starsGroup = new THREE.Group();
-scene.add(starsGroup);
+/* ══════════════════════════════════════════════════════════
+   STAR TEXTURES — 3 types for visual variety
+══════════════════════════════════════════════════════════ */
+function makeStarTex(size=128, spikes=false) {
+  const c   = document.createElement('canvas');
+  c.width   = c.height = size;
+  const ctx = c.getContext('2d');
+  const h   = size/2;
 
-let starsLoaded = 0;
-
-setLoad(10, 'ЗАГРУЗКА ЗВЁЗДНЫХ ДАННЫХ...');
-
-fetch('stars_data.json')
-  .then(r => r.json())
-  .then(data => {
-    setLoad(50, 'СОЗДАНИЕ ЧАСТИЦ...');
-    buildStars(data);
-    setLoad(90, 'ФИНАЛИЗАЦИЯ СЦЕНЫ...');
-    setTimeout(() => {
-      document.getElementById('load-fill').style.width = '100%';
-      document.getElementById('load-msg').textContent = 'ГОТОВО';
-      setTimeout(() => { document.getElementById('loading').style.display = 'none'; }, 400);
-    }, 300);
-  })
-  .catch(() => {
-    // Fallback: generate procedural stars if JSON not available
-    setLoad(50, 'JSON НЕ НАЙДЕН — ГЕНЕРАЦИЯ...');
-    const fallback = [];
-    for (let i = 0; i < 8000; i++) {
-      const r = Math.pow(Math.random(), 0.5) * 2000;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = (Math.random() - 0.5) * 0.3;
-      fallback.push({
-        x: r * Math.cos(theta),
-        y: r * Math.sin(phi) * 80,
-        z: r * Math.sin(theta),
-        mag: 3 + Math.random() * 10
-      });
-    }
-    buildStars(fallback);
-    setLoad(100, 'ГОТОВО (ПРОЦЕДУРНЫЕ ДАННЫЕ)');
-    setTimeout(() => { document.getElementById('loading').style.display = 'none'; }, 500);
-  });
-
-function buildStars(data) {
-  starsLoaded = data.length;
-  document.getElementById('hud-count').textContent = starsLoaded.toLocaleString();
-
-  // Split into brightness tiers for visual quality
-  const tiers = [
-    { threshold: 6,   size: 4.5, opacity: 1.0,  color: 0xfff0cc },
-    { threshold: 8,   size: 2.8, opacity: 0.9,  color: 0xddeeff },
-    { threshold: 10,  size: 1.8, opacity: 0.7,  color: 0xaaccff },
-    { threshold: 999, size: 1.0, opacity: 0.45, color: 0x8899cc },
-  ];
-
-  const groups = tiers.map(() => ({ positions: [], count: 0 }));
-
-  for (const s of data) {
-    let ti = 3;
-    for (let i = 0; i < tiers.length; i++) {
-      if (s.mag < tiers[i].threshold) { ti = i; break; }
-    }
-    groups[ti].positions.push(s.x, s.z, s.y); // remap Y/Z for galactic plane
-    groups[ti].count++;
+  if (spikes) {
+    // Diffraction spike cross (for very bright stars)
+    ctx.globalCompositeOperation = 'source-over';
+    // Horizontal spike
+    const hg = ctx.createLinearGradient(0,h,size,h);
+    hg.addColorStop(0,'rgba(255,255,255,0)');
+    hg.addColorStop(0.45,'rgba(255,255,255,0.25)');
+    hg.addColorStop(0.5,'rgba(255,255,255,0.55)');
+    hg.addColorStop(0.55,'rgba(255,255,255,0.25)');
+    hg.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=hg; ctx.fillRect(0,h-3,size,6);
+    // Vertical spike
+    const vg = ctx.createLinearGradient(h,0,h,size);
+    vg.addColorStop(0,'rgba(255,255,255,0)');
+    vg.addColorStop(0.45,'rgba(255,255,255,0.25)');
+    vg.addColorStop(0.5,'rgba(255,255,255,0.55)');
+    vg.addColorStop(0.55,'rgba(255,255,255,0.25)');
+    vg.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=vg; ctx.fillRect(h-3,0,6,size);
   }
 
-  for (let ti = 0; ti < tiers.length; ti++) {
-    if (groups[ti].count === 0) continue;
-    const t = tiers[ti];
+  // Main glow
+  const g = ctx.createRadialGradient(h,h,0,h,h,h);
+  g.addColorStop(0,    'rgba(255,255,255,1)');
+  g.addColorStop(0.04, 'rgba(255,255,255,0.98)');
+  g.addColorStop(0.12, 'rgba(255,255,255,0.75)');
+  g.addColorStop(0.28, 'rgba(255,255,255,0.32)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.08)');
+  g.addColorStop(0.80, 'rgba(255,255,255,0.02)');
+  g.addColorStop(1,    'rgba(255,255,255,0)');
+  ctx.globalCompositeOperation = spikes ? 'source-over' : 'source-over';
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(h,h,h,0,Math.PI*2); ctx.fill();
+
+  const t = new THREE.CanvasTexture(c);
+  t.needsUpdate = true;
+  return t;
+}
+
+const TEX_BRIGHT = makeStarTex(128, true);   // diffraction spikes
+const TEX_NORMAL = makeStarTex(96,  false);  // standard glow
+
+/* ══════════════════════════════════════════════════════════
+   STAR DATA & SCENE BUILDING
+══════════════════════════════════════════════════════════ */
+// Realistic star colours by temperature/magnitude (Gaia G-band proxy)
+// Bright → hot blue-white; mid → yellow-white; faint → red-orange tint
+const TIERS = [
+  // {maxMag, color (hex), size, opacity, tex}
+  { max:  4, col: 0xfff8f0, sz: 9.0,  op: 1.00, tex: TEX_BRIGHT }, // brilliant — warm white w/ spikes
+  { max:  5, col: 0xfff4e0, sz: 6.5,  op: 1.00, tex: TEX_BRIGHT }, // very bright
+  { max:  6, col: 0xfff0cc, sz: 4.8,  op: 0.98, tex: TEX_NORMAL }, // bright — cream
+  { max:  7, col: 0xeef6ff, sz: 3.4,  op: 0.92, tex: TEX_NORMAL }, // hot — blue-white
+  { max:  8, col: 0xd0e8ff, sz: 2.4,  op: 0.82, tex: TEX_NORMAL }, // mid blue
+  { max:  9, col: 0xb8d4ff, sz: 1.7,  op: 0.68, tex: TEX_NORMAL },
+  { max: 10, col: 0x99bbee, sz: 1.2,  op: 0.54, tex: TEX_NORMAL },
+  { max: 11, col: 0x8899cc, sz: 0.85, op: 0.40, tex: TEX_NORMAL },
+  { max: 99, col: 0x6677aa, sz: 0.55, op: 0.26, tex: TEX_NORMAL }, // faint
+];
+
+const SCALE = 1/100;  // parsecs → scene units
+const starsRoot = new THREE.Group();
+scene.add(starsRoot);
+
+let RAW_DATA = [];      // original JSON array for raycasting lookups
+let POSITIONS = null;   // Float32Array for raycaster
+
+function buildStars(data) {
+  RAW_DATA = data;
+  document.getElementById('h-cnt').textContent = data.length.toLocaleString('ru');
+
+  const buckets = TIERS.map(() => []);
+  const posBuf  = new Float32Array(data.length * 3);
+
+  for (let i = 0; i < data.length; i++) {
+    const s = data[i];
+    const x = s.x * SCALE, y = s.z * SCALE, z = s.y * SCALE; // remap Z↔Y for galactic plane
+
+    posBuf[i*3]   = x;
+    posBuf[i*3+1] = y;
+    posBuf[i*3+2] = z;
+
+    let ti = TIERS.length - 1;
+    for (let t = 0; t < TIERS.length; t++) {
+      if (s.mag <= TIERS[t].max) { ti = t; break; }
+    }
+    buckets[ti].push(x, y, z);
+  }
+
+  POSITIONS = posBuf;
+
+  for (let ti = 0; ti < TIERS.length; ti++) {
+    if (!buckets[ti].length) continue;
+    const T   = TIERS[ti];
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(groups[ti].positions, 3));
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(buckets[ti]), 3));
     const mat = new THREE.PointsMaterial({
-      color: t.color,
-      size: t.size,
+      map: T.tex, color: T.col, size: T.sz,
       sizeAttenuation: true,
-      transparent: true,
-      opacity: t.opacity,
+      transparent: true, opacity: T.op,
       blending: THREE.AdditiveBlending,
-      depthWrite: false,
+      depthWrite: false, alphaTest: 0.004,
     });
-    const pts = new THREE.Points(geo, mat);
-    starsGroup.add(pts);
+    starsRoot.add(new THREE.Points(geo, mat));
   }
 
   // Galactic core glow
-  const coreGeo = new THREE.SphereGeometry(40, 16, 16);
-  const coreMat = new THREE.MeshBasicMaterial({
-    color: 0xffdd88, transparent: true, opacity: 0.12,
-    blending: THREE.AdditiveBlending, depthWrite: false
-  });
-  scene.add(new THREE.Mesh(coreGeo, coreMat));
-
-  // Outer glow halo
-  const haloGeo = new THREE.SphereGeometry(120, 16, 16);
-  const haloMat = new THREE.MeshBasicMaterial({
-    color: 0xff8844, transparent: true, opacity: 0.04,
-    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide
-  });
-  scene.add(new THREE.Mesh(haloGeo, haloMat));
+  [
+    {r:4,   col:0xfff0cc, op:.55},
+    {r:14,  col:0xffcc88, op:.18},
+    {r:50,  col:0xff8833, op:.055},
+    {r:160, col:0xcc4411, op:.015},
+    {r:500, col:0x882200, op:.004},
+  ].forEach(({r,col,op}) => scene.add(new THREE.Mesh(
+    new THREE.SphereGeometry(r,16,16),
+    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.BackSide})
+  )));
 }
 
-// ─── CAMERA CONTROLS ─────────────────────────────────────────
-// Spherical camera orbit
-let spherical = { theta: 0, phi: Math.PI / 2.5, radius: 1200 };
-let targetSpherical = { ...spherical };
-let panOffset = new THREE.Vector3(0, 0, 0);
-let targetPan = new THREE.Vector3(0, 0, 0);
+/* ══════════════════════════════════════════════════════════
+   DATA LOADING (3-tier fallback)
+══════════════════════════════════════════════════════════ */
+setLD(8, 'ЗАГРУЗКА ЗВЁЗДНЫХ ДАННЫХ...');
 
-function updateCamera() {
-  // Smooth interpolation
-  spherical.theta += (targetSpherical.theta - spherical.theta) * 0.08;
-  spherical.phi   += (targetSpherical.phi   - spherical.phi)   * 0.08;
-  spherical.radius += (targetSpherical.radius - spherical.radius) * 0.07;
-  spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-  spherical.radius = Math.max(50, Math.min(8000, spherical.radius));
+async function loadData() {
+  // 1) fetch
+  try {
+    const r = await fetch('stars_data.json');
+    if (r.ok) return await r.json();
+    throw new Error('HTTP ' + r.status);
+  } catch(e) { console.warn('[fetch]', e.message); }
 
-  panOffset.lerp(targetPan, 0.08);
+  // 2) THREE.FileLoader (some local servers)
+  try {
+    const raw = await new Promise((res,rej) => new THREE.FileLoader().load('stars_data.json',res,undefined,rej));
+    return JSON.parse(raw);
+  } catch(e) { console.warn('[FileLoader]', e); }
+
+  // 3) Procedural spiral galaxy
+  console.warn('[Fallback] Procedural galaxy');
+  const fb = [];
+  for (let i = 0; i < 9000; i++) {
+    const arm   = Math.floor(Math.random()*4);
+    const ang0  = (arm/4) * Math.PI*2;
+    const rad   = Math.pow(Math.random(), .5) * 4000;
+    const angle = ang0 + rad*.003 + (Math.random()-.5)*.9;
+    const s     = (1-rad/4000)*70+15;
+    fb.push({
+      x: Math.cos(angle)*rad + (Math.random()-.5)*s,
+      y: (Math.random()-.5)*s*.22,
+      z: Math.sin(angle)*rad + (Math.random()-.5)*s,
+      mag: 3 + Math.random()*10,
+    });
+  }
+  return fb;
+}
+
+(async () => {
+  const data = await loadData();
+  setLD(55, 'ПОСТРОЕНИЕ ЧАСТИЦ...');
+  buildStars(data);
+  setLD(88, 'ФИНАЛИЗАЦИЯ...');
+  await new Promise(r=>setTimeout(r,200));
+  setLD(100,'ГОТОВО');
+  await new Promise(r=>setTimeout(r,300));
+  document.getElementById('loading').style.display = 'none';
+})();
+
+/* ══════════════════════════════════════════════════════════
+   CAMERA ORBIT (spherical + lerp)
+══════════════════════════════════════════════════════════ */
+const sph = { theta:.35, phi:1.22, r:160 };  // current
+const tgt = { theta:.35, phi:1.22, r:160 };  // target
+const HOME = { theta:.35, phi:1.22, r:160 }; // home for reset
+const pan  = new THREE.Vector3();
+const tPan = new THREE.Vector3();
+
+function syncCam() {
+  tgt.phi = clamp(tgt.phi, .1, Math.PI-.1);
+  tgt.r   = clamp(tgt.r, .5, 8000);
+
+  sph.theta = lerp(sph.theta, tgt.theta, .08);
+  sph.phi   = lerp(sph.phi,   tgt.phi,   .08);
+  sph.r     = lerp(sph.r,     tgt.r,     .08);
+  pan.lerp(tPan, .08);
 
   camera.position.set(
-    spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta) + panOffset.x,
-    spherical.radius * Math.cos(spherical.phi) + panOffset.y,
-    spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta) + panOffset.z
+    sph.r * Math.sin(sph.phi) * Math.cos(sph.theta) + pan.x,
+    sph.r * Math.cos(sph.phi)                        + pan.y,
+    sph.r * Math.sin(sph.phi) * Math.sin(sph.theta) + pan.z
   );
-  camera.lookAt(panOffset);
+  camera.lookAt(pan);
 }
 
-// Mouse orbit
-let mouseDown = false, lastMX = 0, lastMY = 0;
-canvas3.addEventListener('mousedown', e => { mouseDown = true; lastMX = e.clientX; lastMY = e.clientY; });
-document.addEventListener('mouseup', () => { mouseDown = false; });
-document.addEventListener('mousemove', e => {
-  if (!mouseDown) return;
-  const dx = e.clientX - lastMX, dy = e.clientY - lastMY;
-  lastMX = e.clientX; lastMY = e.clientY;
-  targetSpherical.theta -= dx * 0.006;
-  targetSpherical.phi   -= dy * 0.006;
+function tweenReset() {
+  new TWEEN.Tween(tgt)
+    .to({theta:HOME.theta, phi:HOME.phi, r:HOME.r}, 1400)
+    .easing(TWEEN.Easing.Cubic.InOut)
+    .start();
+  new TWEEN.Tween(tPan)
+    .to({x:0,y:0,z:0}, 1400)
+    .easing(TWEEN.Easing.Cubic.InOut)
+    .start();
+  // Flash
+  const f = document.getElementById('reset-flash');
+  f.style.opacity='1'; setTimeout(()=>f.style.opacity='0',150);
+}
+
+// Mouse
+let mDown=false, mPrev=[0,0];
+canvas.addEventListener('mousedown', e=>{mDown=true;mPrev=[e.clientX,e.clientY];});
+document.addEventListener('mouseup', ()=>mDown=false);
+document.addEventListener('mousemove', e=>{
+  if(!mDown) return;
+  tgt.theta -= (e.clientX-mPrev[0])*.006;
+  tgt.phi   -= (e.clientY-mPrev[1])*.006;
+  mPrev=[e.clientX,e.clientY];
 });
-document.addEventListener('wheel', e => {
-  targetSpherical.radius *= e.deltaY > 0 ? 1.08 : 0.92;
-  document.getElementById('hud-zoom').textContent = (1200 / targetSpherical.radius).toFixed(2) + 'x';
+document.addEventListener('wheel', e=>{tgt.r*=e.deltaY>0?1.09:.92;},{passive:true});
+
+// Mouse click → raycasting
+canvas.addEventListener('click', e=>{
+  if(mDown) return;
+  handleMousePick(e.clientX, e.clientY);
 });
 
-// ─── GESTURE CONTROL ─────────────────────────────────────────
-let gestureState = {
-  type: 'none',       // 'fist' | 'pinch' | 'palm' | 'none'
-  prevX: 0, prevY: 0, // normalized 0-1 hand center
-  prevDist: 0,        // pinch distance in normalized units
-  active: false,
-  smoothX: 0.5, smoothY: 0.5
-};
+/* ══════════════════════════════════════════════════════════
+   RAYCASTING  (hand fingertip OR mouse)
+══════════════════════════════════════════════════════════ */
+const raycaster   = new THREE.Raycaster();
+raycaster.params.Points.threshold = 1.2;
 
-const GESTURE_SMOOTHING = 0.35;
+const selectRing  = document.getElementById('select-ring');
+const dwellSVG    = document.getElementById('dwell-svg');
+const dwellCircle = document.getElementById('dwell-circle');
+const DWELL_MS    = 1000;  // 1 second dwell to select
+const CIRC_LEN    = 119.4; // circumference
 
-function classifyGesture(landmarks) {
-  // landmarks: array of 21 {x,y,z} normalized to [0,1]
-  const lm = landmarks;
+let selectedIdx   = -1;
+let dwellStart    = 0;
+let dwellActive   = false;
+let dwellScreenX  = 0, dwellScreenY = 0;
 
-  // Finger tip IDs: thumb=4, index=8, middle=12, ring=16, pinky=20
-  // MCP (knuckle) IDs: index=5, middle=9, ring=13, pinky=17
-  // Wrist: 0, Palm center: average of 0,5,9,13,17
+// Place ring at screen position
+function placeRing(sx, sy) {
+  selectRing.style.left  = sx + 'px';
+  selectRing.style.top   = sy + 'px';
+  dwellSVG.style.left    = (sx-3) + 'px';  // small offset to center
+  dwellSVG.style.top     = (sy-3) + 'px';
+}
 
-  const wrist = lm[0];
-  const palmCenter = {
-    x: (lm[0].x + lm[5].x + lm[9].x + lm[13].x + lm[17].x) / 5,
-    y: (lm[0].y + lm[5].y + lm[9].y + lm[13].y + lm[17].y) / 5,
-  };
+function showRing(sx, sy) {
+  placeRing(sx,sy);
+  selectRing.classList.add('visible');
+  dwellSVG.classList.add('visible');
+}
 
-  // Finger extension: tip vs pip (second joint) vertical distance
-  // If tip is above pip (smaller y in image coords) → extended
-  function isExtended(tipIdx, pipIdx) {
-    return lm[tipIdx].y < lm[pipIdx].y;
+function hideRing() {
+  selectRing.classList.remove('visible');
+  dwellSVG.classList.remove('visible');
+  dwellActive = false;
+  dwellCircle.style.strokeDashoffset = CIRC_LEN;
+}
+
+function pickStarAt(normX, normY) {
+  raycaster.setFromCamera(new THREE.Vector2(normX, normY), camera);
+  const hits = raycaster.intersectObjects(starsRoot.children, false);
+  if (!hits.length) { hideRing(); hideStarPanel(); return; }
+
+  const hit = hits[0];
+  // Find global index in RAW_DATA via position matching
+  const pos = hit.object.geometry.attributes.position;
+  const vi  = hit.index;
+  const hx  = pos.getX(vi), hy = pos.getY(vi), hz = pos.getZ(vi);
+
+  let bestIdx = -1, bestD = Infinity;
+  for (let i = 0; i < RAW_DATA.length; i++) {
+    const d = Math.abs(RAW_DATA[i].x*SCALE - hx)
+            + Math.abs(RAW_DATA[i].z*SCALE - hy)
+            + Math.abs(RAW_DATA[i].y*SCALE - hz);
+    if (d < bestD) { bestD=d; bestIdx=i; }
   }
 
-  const thumbExt  = lm[4].x < lm[3].x; // thumb goes sideways
-  const indexExt  = isExtended(8,  6);
-  const middleExt = isExtended(12, 10);
-  const ringExt   = isExtended(16, 14);
-  const pinkyExt  = isExtended(20, 18);
+  if (bestIdx === -1) return;
+  selectedIdx = bestIdx;
+  showStarPanel(selectedIdx);
+}
 
-  const extCount = [indexExt, middleExt, ringExt, pinkyExt].filter(Boolean).length;
+function handleMousePick(cx,cy) {
+  const nx = (cx/innerWidth)*2-1;
+  const ny = -(cy/innerHeight)*2+1;
+  pickStarAt(nx,ny);
+}
 
-  // Pinch: thumb tip close to index tip
-  const pinchDist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-  if (pinchDist < 0.07) return 'pinch';
+function showStarPanel(idx) {
+  const s = RAW_DATA[idx];
+  const dist = Math.sqrt(s.x*s.x + s.y*s.y + s.z*s.z);
+  document.getElementById('sp-id').textContent   = '#' + idx;
+  document.getElementById('sp-mag').textContent  = s.mag.toFixed(2);
+  document.getElementById('sp-dist').textContent = dist.toFixed(1) + ' пк';
+  document.getElementById('sp-xyz').textContent  = `${s.x.toFixed(0)}, ${s.y.toFixed(0)}, ${s.z.toFixed(0)}`;
+  // Mag bar: mag 3 = 100%, mag 13 = 0%
+  const pct = Math.max(0, Math.min(100, (1-(s.mag-3)/10)*100));
+  document.getElementById('sp-mag-fill').style.width = pct + '%';
+  document.getElementById('star-panel').classList.add('visible');
+}
 
-  // Fist: all fingers curled
-  if (extCount === 0) return 'fist';
+function hideStarPanel() {
+  document.getElementById('star-panel').classList.remove('visible');
+  selectedIdx = -1;
+}
 
-  // Palm: 3+ fingers extended
-  if (extCount >= 3) return 'palm';
+/* ══════════════════════════════════════════════════════════
+   GESTURE CLASSIFIER
+══════════════════════════════════════════════════════════ */
+//   lm[i].y: image-space, 0=top → smaller y = higher on screen = "extended"
+function classifyGesture(lm) {
+  const ext = [
+    lm[8].y  < lm[6].y,   // index
+    lm[12].y < lm[10].y,  // middle
+    lm[16].y < lm[14].y,  // ring
+    lm[20].y < lm[18].y,  // pinky
+  ];
+  const n = ext.filter(Boolean).length;
+
+  // ✌ Peace / Reset: index + middle extended, rest folded
+  if (ext[0] && ext[1] && !ext[2] && !ext[3]) return 'peace';
+
+  // 🤏 Pinch: thumb-index distance
+  const pd = Math.hypot(lm[4].x-lm[8].x, lm[4].y-lm[8].y);
+  if (pd < 0.075) return 'pinch';
+
+  // ✊ Fist
+  if (n === 0) return 'fist';
+
+  // ☝ Point: only index extended
+  if (ext[0] && !ext[1] && !ext[2] && !ext[3]) return 'point';
+
+  // ✋ Palm: 3+ extended
+  if (n >= 3) return 'palm';
 
   return 'none';
 }
 
-function applyGestureControl(landmarks, gesture) {
-  // Center of palm (use middle finger base as anchor)
-  const cx = landmarks[9].x;
-  const cy = landmarks[9].y;
-
-  // Smooth the position
-  gestureState.smoothX += (cx - gestureState.smoothX) * GESTURE_SMOOTHING;
-  gestureState.smoothY += (cy - gestureState.smoothY) * GESTURE_SMOOTHING;
-
-  const dx = gestureState.smoothX - gestureState.prevX;
-  const dy = gestureState.smoothY - gestureState.prevY;
-
-  if (gestureState.type !== gesture) {
-    // On gesture change, reset prev so no jump
-    gestureState.prevX = gestureState.smoothX;
-    gestureState.prevY = gestureState.smoothY;
-    gestureState.type = gesture;
-    gestureState.prevDist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
-    return;
-  }
-
-  if (gesture === 'fist') {
-    // Rotate: hand movement → orbit angles
-    targetSpherical.theta -= dx * 6.0;
-    targetSpherical.phi   += dy * 4.0;
-  } else if (gesture === 'pinch') {
-    // Zoom: pinch distance change → radius
-    const dist = Math.hypot(landmarks[4].x - landmarks[8].x, landmarks[4].y - landmarks[8].y);
-    const delta = dist - gestureState.prevDist;
-    targetSpherical.radius *= (1 - delta * 12);
-    document.getElementById('hud-zoom').textContent = (1200 / targetSpherical.radius).toFixed(2) + 'x';
-    gestureState.prevDist = dist;
-  } else if (gesture === 'palm') {
-    // Pan: move camera target in world space
-    const panSpeed = spherical.radius * 0.8;
-    targetPan.x -= dx * panSpeed;
-    targetPan.y += dy * panSpeed;
-  }
-
-  gestureState.prevX = gestureState.smoothX;
-  gestureState.prevY = gestureState.smoothY;
-}
-
-// Gesture UI
-const gestureLabels = {
-  fist:  ['✊', 'ВРАЩЕНИЕ'],
-  pinch: ['🤏', 'МАСШТАБ'],
-  palm:  ['✋', 'ПАНОРАМА'],
-  none:  ['🖐', 'НЕТ ЖЕСТА'],
+/* ══════════════════════════════════════════════════════════
+   GESTURE STATE
+══════════════════════════════════════════════════════════ */
+const gs = {
+  type: 'none',
+  sx:.5, sy:.5,  // smoothed palm (lm9)
+  px:.5, py:.5,
+  pDist:0,
+  skip:0,
+  // For point-dwell
+  pointX:.5, pointY:.5,  // fingertip screen pos
+  pPointX:.5, pPointY:.5,
+  dwellStart:0, dwellActive:false,
 };
-let lastGestureType = '';
 
-function updateGestureHUD(gesture) {
-  if (gesture === lastGestureType) return;
-  lastGestureType = gesture;
-  const [icon, text] = gestureLabels[gesture] || ['—', '—'];
-  document.getElementById('gesture-icon').textContent = icon;
-  document.getElementById('gesture-text').textContent = text;
-  document.getElementById('hud-gesture').textContent = text;
+const SMOOTH = 0.25;
+
+function ndcFromLM(lm, idx) {
+  // lm x is 0-1 in mirrored camera; invert for scene NDC
+  return {
+    ndcX: -(lm[idx].x * 2 - 1),
+    ndcY:  -(lm[idx].y * 2 - 1),
+    scX:   (1-lm[idx].x) * innerWidth,
+    scY:    lm[idx].y    * innerHeight,
+  };
 }
 
-// ─── MEDIAPIPE SETUP ─────────────────────────────────────────
-let handsReady = false;
-let handsDetector = null;
-let mpCamera = null;
-const videoEl  = document.getElementById('cam-video');
+function applyGesture(lm, gesture) {
+  // Smooth palm centre (lm9)
+  gs.sx = lerp(gs.sx, lm[9].x, SMOOTH);
+  gs.sy = lerp(gs.sy, lm[9].y, SMOOTH);
+
+  if (gs.type !== gesture) {
+    gs.type = gesture;
+    gs.skip = 3;
+    gs.px = gs.sx; gs.py = gs.sy;
+    gs.pDist = Math.hypot(lm[4].x-lm[8].x, lm[4].y-lm[8].y);
+    updateGestureHUD(gesture);
+    // Cancel dwell on gesture change
+    hideRing();
+    gs.dwellActive = false;
+  }
+
+  if (gs.skip>0) { gs.skip--; gs.px=gs.sx; gs.py=gs.sy; return; }
+
+  const dx = gs.sx - gs.px;
+  const dy = gs.sy - gs.py;
+
+  switch(gesture) {
+    case 'fist':
+      tgt.theta -= dx * 8.0;
+      tgt.phi   += dy * 6.0;
+      break;
+
+    case 'pinch': {
+      const d = Math.hypot(lm[4].x-lm[8].x, lm[4].y-lm[8].y);
+      tgt.r = clamp(tgt.r * (1-(d-gs.pDist)*16), .5, 8000);
+      gs.pDist = d;
+      break;
+    }
+
+    case 'palm':
+      tPan.x -= dx * sph.r * 1.4;
+      tPan.y += dy * sph.r * 1.4;
+      break;
+
+    case 'point': {
+      // Move index fingertip (lm8) → raycasting + dwell selection
+      const tip = ndcFromLM(lm, 8);
+      gs.pointX = lerp(gs.pointX||tip.ndcX, tip.ndcX, .35);
+      gs.pointY = lerp(gs.pointY||tip.ndcY, tip.ndcY, .35);
+      gs.scX    = tip.scX; gs.scY = tip.scY;
+
+      // Check hover
+      raycaster.setFromCamera(new THREE.Vector2(gs.pointX, gs.pointY), camera);
+      const hits = raycaster.intersectObjects(starsRoot.children, false);
+
+      if (hits.length) {
+        showRing(tip.scX, tip.scY);
+        if (!gs.dwellActive) { gs.dwellActive=true; gs.dwellStart=Date.now(); }
+        const elapsed = Date.now() - gs.dwellStart;
+        const pct = Math.min(1, elapsed/DWELL_MS);
+        // Animate dwell ring
+        dwellCircle.style.strokeDashoffset = CIRC_LEN * (1-pct);
+        if (pct >= 1) {
+          // SELECT!
+          pickStarAt(gs.pointX, gs.pointY);
+          gs.dwellActive = false;
+          gs.dwellStart  = 0;
+          dwellCircle.style.strokeDashoffset = CIRC_LEN;
+        }
+      } else {
+        hideRing();
+        gs.dwellActive = false;
+        dwellCircle.style.strokeDashoffset = CIRC_LEN;
+      }
+      break;
+    }
+
+    case 'peace':
+      tweenReset();
+      hideStarPanel();
+      break;
+  }
+
+  if (gesture !== 'point') { gs.pointX=.5; gs.pointY=.5; }
+  gs.px=gs.sx; gs.py=gs.sy;
+}
+
+/* ══════════════════════════════════════════════════════════
+   HAND SKELETON RENDERER
+══════════════════════════════════════════════════════════ */
+const BONES = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17]
+];
+const GCOL = { fist:'#ff4422', pinch:'#ffdd22', palm:'#22ffcc', point:'#44aaff', peace:'#aa88ff', none:'#5577aa' };
+
 const camCanvas = document.getElementById('cam-canvas');
-const camCtx   = camCanvas.getContext('2d');
+const camCtx    = camCanvas.getContext('2d');
 
-function enableCamera() {
-  document.getElementById('cam-enable-btn').textContent = '⏳ ПОДКЛЮЧЕНИЕ...';
-  document.getElementById('cam-enable-btn').disabled = true;
+function drawHand(lm, g) {
+  const W = camCanvas.width  = camCanvas.offsetWidth  || 180;
+  const H = camCanvas.height = camCanvas.offsetHeight || 135;
+  camCtx.clearRect(0,0,W,H);
+  const col = GCOL[g] || '#5577aa';
 
-  // Init MediaPipe Hands
-  handsDetector = new Hands({
-    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
-  });
+  camCtx.strokeStyle = col;
+  camCtx.lineWidth   = 1.6;
+  camCtx.globalAlpha = 0.68;
+  for (const [a,b] of BONES) {
+    camCtx.beginPath();
+    camCtx.moveTo((1-lm[a].x)*W, lm[a].y*H);
+    camCtx.lineTo((1-lm[b].x)*W, lm[b].y*H);
+    camCtx.stroke();
+  }
 
-  handsDetector.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.6
-  });
+  camCtx.globalAlpha = 1;
+  for (let i=0;i<21;i++) {
+    const tip=[4,8,12,16,20].includes(i), key=[0,5,9,13,17].includes(i);
+    camCtx.beginPath();
+    camCtx.arc((1-lm[i].x)*W, lm[i].y*H, tip?5.5:key?3.8:2.5, 0, Math.PI*2);
+    camCtx.fillStyle = (i===4||i===8)?'#fff':col;
+    camCtx.fill();
+  }
 
-  handsDetector.onResults(onHandResults);
+  // Pinch line
+  if (g==='pinch') {
+    camCtx.globalAlpha=.55; camCtx.strokeStyle='#fff'; camCtx.lineWidth=1;
+    camCtx.setLineDash([3,3]);
+    camCtx.beginPath();
+    camCtx.moveTo((1-lm[4].x)*W, lm[4].y*H);
+    camCtx.lineTo((1-lm[8].x)*W, lm[8].y*H);
+    camCtx.stroke(); camCtx.setLineDash([]);
+  }
 
-  mpCamera = new Camera(videoEl, {
-    onFrame: async () => {
-      if (handsDetector) await handsDetector.send({ image: videoEl });
-    },
-    width: 320, height: 240
-  });
-
-  mpCamera.start()
-    .then(() => {
-      handsReady = true;
-      document.getElementById('cam-container').style.display = 'block';
-      document.getElementById('cam-enable-btn').textContent = '✅ КАМЕРА АКТИВНА';
-      document.getElementById('cam-status').textContent = 'АКТИВНО';
-    })
-    .catch(err => {
-      console.error('Camera error:', err);
-      document.getElementById('cam-enable-btn').textContent = '❌ НЕТ ДОСТУПА';
-      document.getElementById('cam-enable-btn').disabled = false;
-    });
+  // Point finger highlight
+  if (g==='point') {
+    camCtx.globalAlpha=.5; camCtx.strokeStyle='#44aaff'; camCtx.lineWidth=2;
+    camCtx.beginPath();
+    camCtx.arc((1-lm[8].x)*W, lm[8].y*H, 9, 0, Math.PI*2);
+    camCtx.stroke();
+  }
 }
 
-function onHandResults(results) {
-  // Draw skeleton on minimap
-  const vw = videoEl.videoWidth  || 320;
-  const vh = videoEl.videoHeight || 240;
-  camCanvas.width  = camCanvas.offsetWidth  || 200;
-  camCanvas.height = camCanvas.offsetHeight || 150;
-  camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+/* ══════════════════════════════════════════════════════════
+   MEDIAPIPE
+══════════════════════════════════════════════════════════ */
+const vidEl = document.getElementById('cam-video');
 
-  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-    updateGestureHUD('none');
-    gestureState.type = 'none';
+function onResults(results) {
+  camCanvas.width  = camCanvas.offsetWidth  || 180;
+  camCanvas.height = camCanvas.offsetHeight || 135;
+  camCtx.clearRect(0,0,camCanvas.width,camCanvas.height);
+
+  if (!results.multiHandLandmarks?.length) {
+    if (gs.type!=='none') { gs.type='none'; updateGestureHUD('none'); }
+    hideRing();
     return;
   }
 
   const lm = results.multiHandLandmarks[0];
-  const gesture = classifyGesture(lm);
-  applyGestureControl(lm, gesture);
-  updateGestureHUD(gesture);
-
-  // Draw skeleton
-  const W = camCanvas.width, H = camCanvas.height;
-  // Connections (MediaPipe hand topology)
-  const connections = [
-    [0,1],[1,2],[2,3],[3,4],
-    [0,5],[5,6],[6,7],[7,8],
-    [5,9],[9,10],[10,11],[11,12],
-    [9,13],[13,14],[14,15],[15,16],
-    [13,17],[17,18],[18,19],[19,20],
-    [0,17]
-  ];
-  const gestureColor = { fist: '#ff6644', pinch: '#ffdd44', palm: '#44ffcc', none: '#88aaff' };
-  const col = gestureColor[gesture] || '#88aaff';
-
-  camCtx.strokeStyle = col;
-  camCtx.lineWidth = 1.5;
-  camCtx.globalAlpha = 0.8;
-  for (const [a, b] of connections) {
-    camCtx.beginPath();
-    // flip X because video is mirrored
-    camCtx.moveTo((1 - lm[a].x) * W, lm[a].y * H);
-    camCtx.lineTo((1 - lm[b].x) * W, lm[b].y * H);
-    camCtx.stroke();
-  }
-  camCtx.globalAlpha = 1;
-  for (let i = 0; i < lm.length; i++) {
-    const r = [4, 8, 12, 16, 20].includes(i) ? 5 : 3;
-    camCtx.beginPath();
-    camCtx.arc((1 - lm[i].x) * W, lm[i].y * H, r, 0, Math.PI * 2);
-    camCtx.fillStyle = [4, 8].includes(i) ? '#ffffff' : col;
-    camCtx.fill();
-  }
+  const g  = classifyGesture(lm);
+  applyGesture(lm, g);
+  drawHand(lm, g);
 }
 
-// ─── RENDER LOOP ─────────────────────────────────────────────
-let lastTime = performance.now();
-let frames = 0, fpsTimer = 0;
+function enableCam() {
+  const btn = document.getElementById('cam-btn');
+  btn.textContent = '⏳ Подключение...'; btn.disabled=true;
+
+  const hands = new Hands({ locateFile: f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+  hands.setOptions({ maxNumHands:1, modelComplexity:1, minDetectionConfidence:.7, minTrackingConfidence:.6 });
+  hands.onResults(onResults);
+
+  new Camera(vidEl, {
+    onFrame: async()=>{ await hands.send({image:vidEl}); },
+    width:320, height:240,
+  }).start()
+    .then(()=>{
+      document.getElementById('cam-wrap').style.display='block';
+      btn.textContent='✅ Камера активна';
+      document.getElementById('gt').textContent='Покажи руку';
+    })
+    .catch(err=>{
+      console.error(err);
+      btn.textContent='❌ Нет доступа'; btn.disabled=false;
+    });
+}
+
+/* ══════════════════════════════════════════════════════════
+   GESTURE HUD
+══════════════════════════════════════════════════════════ */
+const GMETA = {
+  fist:  {icon:'✊', text:'ВРАЩЕНИЕ',  border:'rgba(255,68,34,.55)'},
+  pinch: {icon:'🤏', text:'ЗУМ',       border:'rgba(255,220,34,.55)'},
+  palm:  {icon:'✋', text:'ПАНОРАМА',  border:'rgba(34,255,200,.45)'},
+  point: {icon:'☝',  text:'ВЫБОР',     border:'rgba(68,170,255,.55)'},
+  peace: {icon:'✌️', text:'СБРОС',    border:'rgba(170,136,255,.55)'},
+  none:  {icon:'🖐', text:'НЕТ ЖЕСТА',border:'rgba(80,200,255,.18)'},
+};
+
+function updateGestureHUD(g) {
+  const m = GMETA[g]||GMETA.none;
+  document.getElementById('gi').textContent  = m.icon;
+  document.getElementById('gt').textContent  = m.text;
+  document.getElementById('h-gest').textContent = m.text;
+  document.getElementById('gest-badge').style.borderColor = m.border;
+}
+
+/* ══════════════════════════════════════════════════════════
+   ANIMATE
+══════════════════════════════════════════════════════════ */
+let lastT = performance.now(), fc=0, fa=0;
 
 function animate() {
   requestAnimationFrame(animate);
-
   const now = performance.now();
-  const dt = (now - lastTime) / 1000;
-  lastTime = now;
-  frames++; fpsTimer += dt;
-  if (fpsTimer > 0.5) {
-    document.getElementById('hud-fps').textContent = Math.round(frames / fpsTimer);
-    frames = 0; fpsTimer = 0;
-  }
+  const dt  = Math.min((now-lastT)/1000, .1);
+  lastT = now;
 
-  // Slow rotation of star field
-  starsGroup.rotation.y += 0.00004;
+  fc++; fa+=dt;
+  if (fa>.5) { document.getElementById('h-fps').textContent=Math.round(fc/fa); fc=0; fa=0; }
 
-  updateCamera();
+  TWEEN.update(now);
+  starsRoot.rotation.y += 0.000028;
+  syncCam();
 
-  // Update HUD coords
-  const r = spherical.radius;
-  document.getElementById('hud-x').textContent = (8.3 + panOffset.x * 0.0002).toFixed(3) + ' кпк';
-  document.getElementById('hud-y').textContent = (panOffset.y * 0.0002).toFixed(3) + ' / ' + (panOffset.z * 0.0002).toFixed(3);
+  document.getElementById('h-pos').innerHTML =
+    (8.3 + camera.position.x*.0003).toFixed(3)+' <small>кпк</small>';
+  document.getElementById('h-rad').innerHTML =
+    sph.r.toFixed(1)+' <small>пк</small>';
 
   renderer.render(scene, camera);
 }
